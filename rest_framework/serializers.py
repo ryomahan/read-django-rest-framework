@@ -82,12 +82,15 @@ ALL_FIELDS = '__all__'
 
 class BaseSerializer(Field):
     """
+    这是一个基础序列化类，为执行自定义序列化类提供了基础
     The BaseSerializer class provides a minimal class which may be used
     for writing custom serializer implementations.
 
+    序列化类上的方法和属性都进行了严格的顺序安排，只有按照顺序执行才能获取正确的值
     Note that we strongly restrict the ordering of operations/properties
     that may be used on the serializer in order to enforce correct usage.
 
+    如果传入 data 参数
     In particular, if a `data=` argument is passed then:
 
     .is_valid() - Available.
@@ -96,6 +99,7 @@ class BaseSerializer(Field):
     .errors - Only available after calling `is_valid()`
     .data - Only available after calling `is_valid()`
 
+    如果没有传入 data 参数
     If a `data=` argument is not passed then:
 
     .is_valid() - Not available.
@@ -106,9 +110,13 @@ class BaseSerializer(Field):
     """
 
     def __init__(self, instance=None, data=empty, **kwargs):
+        # TODO 疑问 实例指的是什么
+        # 当执行更新操作时会传入一个从数据库取出的实例，后面部分用 instance 属性是否存在来判断是新增还是更新
         self.instance = instance
         if data is not empty:
+            # initial 最初的
             self.initial_data = data
+        # partial 部分的
         self.partial = kwargs.pop('partial', False)
         self._context = kwargs.pop('context', {})
         kwargs.pop('many', None)
@@ -117,6 +125,7 @@ class BaseSerializer(Field):
     def __new__(cls, *args, **kwargs):
         # We override this method in order to automagically create
         # `ListSerializer` classes instead when `many=True` is set.
+        # 重写这个方法为了适应当 many 为 Ture 的情况
         if kwargs.pop('many', False):
             return cls.many_init(*args, **kwargs)
         return super().__new__(cls, *args, **kwargs)
@@ -124,11 +133,15 @@ class BaseSerializer(Field):
     @classmethod
     def many_init(cls, *args, **kwargs):
         """
+        当 many=True 被使用时，此方法会创建一个 ListSerializer 父类
+        可以自定义设置哪些参数需要传递给父类哪些需要传递给子类
         This method implements the creation of a `ListSerializer` parent
         class when `many=True` is used. You can customize it if you need to
         control which keyword arguments are passed to the parent, and
         which are passed to the child.
 
+        注意：为了覆盖常见的使用场景，作者在编写此函数时非常的谨慎
+        如果重写这个方法可以实现的更加简洁一点
         Note that we're over-cautious in passing most arguments to both parent
         and child classes in order to try to cover the general case. If you're
         overriding this method you'll probably want something much simpler, eg:
@@ -154,15 +167,19 @@ class BaseSerializer(Field):
         return list_serializer_class(*args, **list_kwargs)
 
     def to_internal_value(self, data):
+        # 验证数据的方法
         raise NotImplementedError('`to_internal_value()` must be implemented.')
 
     def to_representation(self, instance):
+        # 数据序列化的方法 | 其他类型的数据 -> python 内置数据类型
         raise NotImplementedError('`to_representation()` must be implemented.')
 
     def update(self, instance, validated_data):
+        # 提供实例和验证后的数据 | 更新实例
         raise NotImplementedError('`update()` must be implemented.')
 
     def create(self, validated_data):
+        # 提供验证后的数据 | 创建实例
         raise NotImplementedError('`create()` must be implemented.')
 
     def save(self, **kwargs):
@@ -191,8 +208,7 @@ class BaseSerializer(Field):
         )
 
         validated_data = dict(
-            list(self.validated_data.items()) +
-            list(kwargs.items())
+            list(self.validated_data.items()) + list(kwargs.items())
         )
 
         if self.instance is not None:
@@ -206,18 +222,24 @@ class BaseSerializer(Field):
                 '`create()` did not return an object instance.'
             )
 
+        # TODO 疑问 被返回到哪里了
         return self.instance
 
     def is_valid(self, raise_exception=False):
+        # raise_exception 参数用来操控是否抛出错误
+        # 判断是否传入 data，如果没有报错
         assert hasattr(self, 'initial_data'), (
             'Cannot call `.is_valid()` as no `data=` keyword argument was '
             'passed when instantiating the serializer instance.'
         )
 
+        # 如果没有 _validated_data 参数
         if not hasattr(self, '_validated_data'):
             try:
+                # 调用 run_validation 方法进行验证
                 self._validated_data = self.run_validation(self.initial_data)
             except ValidationError as exc:
+                # TODO 疑问 这里为什么要置空
                 self._validated_data = {}
                 self._errors = exc.detail
             else:
@@ -230,6 +252,7 @@ class BaseSerializer(Field):
 
     @property
     def data(self):
+        # 判断是否调用 is_valid 如果没有，报错
         if hasattr(self, 'initial_data') and not hasattr(self, '_validated_data'):
             msg = (
                 'When a serializer is passed a `data` keyword argument you '
@@ -240,12 +263,18 @@ class BaseSerializer(Field):
             )
             raise AssertionError(msg)
 
+        # 如果没有 _data 属性
         if not hasattr(self, '_data'):
+            # 如果 instance 属性不为空并且没有 _errors 属性 | 实际就是有实例传入而且没报错
             if self.instance is not None and not getattr(self, '_errors', None):
+                # 调用 to_representation 获取序列化后的数据
                 self._data = self.to_representation(self.instance)
+            # 如果有 _validated_data 参数并且 _errors 为空 | 实际就是如果数据进行验证了而且没错
             elif hasattr(self, '_validated_data') and not getattr(self, '_errors', None):
+                # 调用 to_representation 获取序列化后的数据
                 self._data = self.to_representation(self.validated_data)
             else:
+                # 否则 | 调用 get_initial 方法
                 self._data = self.get_initial()
         return self._data
 
