@@ -17,7 +17,9 @@ from rest_framework.utils.representation import smart_repr
 # an invalid value returns `False`, rather than raising an error.
 # Refs https://github.com/encode/django-rest-framework/issues/3381
 def qs_exists(queryset):
+    # 如果 queryset 包含任何结果集返回 True 否则返回 False
     try:
+        # queryset.exists() 在 queryset 包含任何结果集时返回 Ture 否则返回 False
         return queryset.exists()
     except (TypeError, ValueError, DataError):
         return False

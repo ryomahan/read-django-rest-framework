@@ -226,6 +226,7 @@ class BaseSerializer(Field):
         return self.instance
 
     def is_valid(self, raise_exception=False):
+        # TODO Create Route 2 调用 Serializer.is_valid
         # raise_exception 参数用来操控是否抛出错误
         # 判断是否传入 data，如果没有报错
         assert hasattr(self, 'initial_data'), (
@@ -298,8 +299,11 @@ class BaseSerializer(Field):
 
 class SerializerMetaclass(type):
     """
+    declared 公开的 正式的
     This metaclass sets a dictionary named `_declared_fields` on the class.
 
+    TODO 疑惑 这句话没看明白
+    在 class 或者 superclasses 作为属性被包含的任何 Field 实例都将包含在 _declared_fields 中
     Any instances of `Field` included as attributes on either the class
     or on any of its superclasses will be include in the
     `_declared_fields` dictionary.
@@ -307,20 +311,27 @@ class SerializerMetaclass(type):
 
     @classmethod
     def _get_declared_fields(cls, bases, attrs):
+        # 循环 attrs.items() 如果 obj 是 Field 实例则获取 field_name 和 obj
+        # 将上面获取的 field_name 和 attrs.pop(field_name) 组合成元组装进列表里
         fields = [(field_name, attrs.pop(field_name))
                   for field_name, obj in list(attrs.items())
                   if isinstance(obj, Field)]
+        # creation 创造
+        # 通过 _creation_counter 对 fields 进行排列
         fields.sort(key=lambda x: x[1]._creation_counter)
 
+        # TODO 疑惑 这段话是什么意思？
         # Ensures a base class field doesn't override cls attrs, and maintains
         # field precedence when inheriting multiple parents. e.g. if there is a
         # class C(A, B), and A and B both define 'field', use 'field' from A.
         known = set(attrs)
 
         def visit(name):
+            # 向一直字段里添加字段
             known.add(name)
             return name
 
+        # 获取基础字段
         base_fields = [
             (visit(name), f)
             for base in bases if hasattr(base, '_declared_fields')
@@ -365,6 +376,7 @@ class Serializer(BaseSerializer, metaclass=SerializerMetaclass):
         'invalid': _('Invalid data. Expected a dictionary, but got {datatype}.')
     }
 
+    # cached property 缓存装饰器 | 不执行逻辑只返回值
     @cached_property
     def fields(self):
         """
@@ -380,6 +392,7 @@ class Serializer(BaseSerializer, metaclass=SerializerMetaclass):
 
     @property
     def _writable_fields(self):
+        # 返回一个可写字段的生成器
         for field in self.fields.values():
             if not field.read_only:
                 yield field
@@ -436,10 +449,12 @@ class Serializer(BaseSerializer, metaclass=SerializerMetaclass):
 
     def run_validation(self, data=empty):
         """
+        TODO Create Route 3 调用 Serializer.run_validation
         We override the default `run_validation`, because the validation
         performed by validators and the `.validate()` method should
         be coerced into an error dictionary with a 'non_fields_error' key.
         """
+        # 判断待验证的值是否是一个可为空的值
         (is_empty_value, data) = self.validate_empty_values(data)
         if is_empty_value:
             return data
@@ -483,8 +498,12 @@ class Serializer(BaseSerializer, metaclass=SerializerMetaclass):
 
     def to_internal_value(self, data):
         """
+        TODO Create Route 5
+        internal 内部的
+        将传递来的数据转换为 Python 原始数据类型
         Dict of native values <- Dict of primitive datatypes.
         """
+        # TODO 疑惑 这是啥意思
         if not isinstance(data, Mapping):
             message = self.error_messages['invalid'].format(
                 datatype=type(data).__name__
@@ -492,15 +511,20 @@ class Serializer(BaseSerializer, metaclass=SerializerMetaclass):
             raise ValidationError({
                 api_settings.NON_FIELD_ERRORS_KEY: [message]
             }, code='invalid')
-
+        # OrderedDict 有序字典
         ret = OrderedDict()
         errors = OrderedDict()
+        # 获取可写字段，返回一个可写字段生成器
         fields = self._writable_fields
 
         for field in fields:
+            # 遍历可写字段生成器
+            # 字段验证方法默认为 validate_{field_name}
             validate_method = getattr(self, 'validate_' + field.field_name, None)
+            # primitive 原始的
             primitive_value = field.get_value(data)
             try:
+                # 运行字段
                 validated_value = field.run_validation(primitive_value)
                 if validate_method is not None:
                     validated_value = validate_method(validated_value)

@@ -489,9 +489,11 @@ class Field:
 
     def get_default(self):
         """
+        当验证数据没有为此字段提供任何输入时,返回默认值以供使用
         Return the default value to use when validating data if no input
         is provided for this field.
 
+        如果该字段没有默认值，抛出 SkipField，表示该字段的有效验证数据中不应该设置任何值
         If a default has not been set for this field then this will simply
         raise `SkipField`, indicating that no value should be set in the
         validated data for this field.
@@ -519,22 +521,31 @@ class Field:
 
     def validate_empty_values(self, data):
         """
+        TODO Create Route 4
+        TODO 疑问 他是怎么做到的，明明只调用了一次，但是却运行了很多次
+        验证空值并
         Validate empty values, and either:
 
+        抛出 ValidationError 表示数据无效
         * Raise `ValidationError`, indicating invalid data.
+        抛出 SkipField 表示字段应该被忽略
         * Raise `SkipField`, indicating that the field should be ignored.
+        返回 Ture 和 data 表示应该返回一个空值不需要进行验证
         * Return (True, data), indicating an empty value that should be
           returned without any further validation being applied.
+        返回 False 和 data 表示是一个非空值，需要进行下一步认证
         * Return (False, data), indicating a non-empty value, that should
           have validation applied as normal.
         """
         if self.read_only:
+            # 如果是只读字段
             return (True, self.get_default())
 
         if data is empty:
             if getattr(self.root, 'partial', False):
                 raise SkipField()
             if self.required:
+                # 如果字段数据为空，且字段为必须，抛出错误
                 self.fail('required')
             return (True, self.get_default())
 
