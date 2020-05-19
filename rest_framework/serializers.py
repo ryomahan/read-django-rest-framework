@@ -487,6 +487,7 @@ class Serializer(BaseSerializer, metaclass=SerializerMetaclass):
 
     def run_validators(self, value):
         """
+        TODO Create Route 6
         Add read_only fields with defaults to value before running validators.
         """
         if isinstance(value, dict):
@@ -494,6 +495,7 @@ class Serializer(BaseSerializer, metaclass=SerializerMetaclass):
             to_validate.update(value)
         else:
             to_validate = value
+        # 调用 Field 类的 run_validators 方法测试给出值对应字段上的全部验证器
         super().run_validators(to_validate)
 
     def to_internal_value(self, data):
@@ -524,10 +526,12 @@ class Serializer(BaseSerializer, metaclass=SerializerMetaclass):
             # primitive 原始的
             primitive_value = field.get_value(data)
             try:
-                # 运行字段
+                # 运行字段自身检测方法
                 validated_value = field.run_validation(primitive_value)
+                # 如果字段自定义检测方法不为空，运行字段自定义检测方法
                 if validate_method is not None:
                     validated_value = validate_method(validated_value)
+            # 官方的做法是将捕获到的异常信息集中起来统一返回
             except ValidationError as exc:
                 errors[field.field_name] = exc.detail
             except DjangoValidationError as exc:
@@ -535,6 +539,7 @@ class Serializer(BaseSerializer, metaclass=SerializerMetaclass):
             except SkipField:
                 pass
             else:
+                # 如果完成验证没有发生异常，将结果设置到有序字典中
                 set_value(ret, field.source_attrs, validated_value)
 
         if errors:
